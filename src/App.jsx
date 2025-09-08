@@ -8,13 +8,11 @@ const LOOKAHEAD_MS = 25;               // scheduler tick
 const SCHEDULE_AHEAD_SEC = 0.2;        // how far ahead to schedule
 const PAD_LEVEL = 1.4;                 // pad chain gain
 const DRUM_LEVEL = 1.0;                // drums chain gain
-const BASS_LEVEL = 0.6;               // bass chain gain
+const BASS_LEVEL = 0.5;                // bass chain gain
 const RAIN_LEVEL = 1.0;                // rain unity
 const MASTER_LEVEL = 1.0;              // overall output
-const SWING = 0.2;                    // 8th-note swing amount (0..~0.5)
-// Sprinkles (high, sparse piano/music_box tinkles)
-const SPRINKLE_LEVEL = 0.9;            // sprinkle bus gain
-const SPRINKLE_MIN_GAP_BARS = 2;       // min bars between sprinkles
+const SWING = 0.2;                     // 8th-note swing amount (0..~0.5)
+const PAD_INSTRUMENT = 'pan_flute';
 
 // Four-bar minor progression (Am7 → Fmaj7 → Cmaj7 → G7)
 const DEFAULT_PROGRESS = [
@@ -27,11 +25,11 @@ const DEFAULT_PROGRESS = [
 // Minor pools for variety (each inner is 4-bar progression)
 const MINOR_POOLS = [
   DEFAULT_PROGRESS,
-  [ // Am7 – Dm7 – E7 – Am7
+  [ // Am7 – G7 – Fmaj7 – E7
     ['A3','C4','E4','G4'],
-    ['D3','F3','A3','C4'],
-    ['E3','G#3','B3','D4'],
-    ['A3','C4','E4','G4']
+    ['G3','B3','D4','F4'],
+    ['F3','A3','C4','E4'],
+    ['E3','G#3','B3','D4']
   ],
   [ // Dm7 – G7 – Cmaj7 – Am7
     ['D3','F3','A3','C4'],
@@ -41,7 +39,6 @@ const MINOR_POOLS = [
   ]
 ];
 const CHANGE_EVERY_BARS = 16; // switch progression every N bars
-const PHASE_LENGTH_BARS = 32; // long-term phase length
 
 export default function App() {
   const [bpm, setBpm] = useState(() => {
@@ -51,14 +48,6 @@ export default function App() {
   const bpmRef = useRef(bpm);
   useEffect(() => { bpmRef.current = bpm; }, [bpm]);
   const [playing, setPlaying] = useState(false);
-  const [bassOn, setBassOn] = useState(() => {
-    const v = localStorage.getItem('bp_el_bass');
-    return v === null ? true : v === 'true';
-  });
-  const [sprinkleOn, setSprinkleOn] = useState(() => {
-    const v = localStorage.getItem('bp_el_sprinkle');
-    return v === null ? true : v === 'true';
-  });
 
   const ctxRef = useRef(null);
   const nodes = useRef({});
@@ -68,25 +57,6 @@ export default function App() {
   const progIdxRef = useRef(0);
   const progressionRef = useRef(DEFAULT_PROGRESS);
   const barCountRef = useRef(0); // total bars scheduled so far
-  const lastSprinkleBarRef = useRef(-999);
-  const phaseMotifRef = useRef(null);
-
-  function makePhaseMotif() {
-    // Build a simple, musical 4–8 bar motif with 1–2 high notes on select bars
-    const phraseBars = Math.random() < 0.5 ? 4 : 8;
-    // choose 2 active bars in the phrase (e.g., bars 2 and 4)
-    const activeBars = new Array(phraseBars).fill(false);
-    const first = Math.floor(Math.random() * phraseBars);
-    let second = (first + (phraseBars > 4 ? 3 : 2)) % phraseBars;
-    activeBars[first] = true; activeBars[second] = true;
-    // rhythmic offsets (beats) within the bar
-    const baseOffsets = Math.random() < 0.5 ? [2.0, 3.5] : [2.5, 3.0];
-    const offsets = baseOffsets.map(b => b + (Math.random() - 0.5) * 0.1);
-    // chord tone indices to pick (upper chord tones)
-    const toneIdx = Math.random() < 0.5 ? [1, 2] : [2, 1];
-    const octavesUp = 2 + (Math.random() < 0.4 ? 1 : 0); // 2 or 3 octaves
-    return { phraseBars, activeBars, offsets, toneIdx, octavesUp };
-  }
 
   // Init audio graph once
   useEffect(() => {
@@ -118,28 +88,14 @@ export default function App() {
     rainGain.gain.value = RAIN_LEVEL;
     rainGain.connect(master);
 
-    // Sprinkles bus
-    const sprinkleGain = ctx.createGain();
-    sprinkleGain.gain.value = SPRINKLE_LEVEL;
-    sprinkleGain.connect(master);
-
-    nodes.current = { ctx, master, drums, padGain, bassGain, sprinkleGain, rainGain };
+    nodes.current = { ctx, master, drums, padGain, bassGain, rainGain };
 
     // Prefetch pad instrument
-    Soundfont.instrument(ctx, 'pan_flute', { soundfont: 'MusyngKite' })
+    Soundfont.instrument(ctx, PAD_INSTRUMENT, { soundfont: 'MusyngKite' })
       .then(inst => {
         nodes.current.sfPad = inst;
         try { inst.disconnect && inst.disconnect(); } catch {}
         try { inst.connect && inst.connect(padGain); } catch {}
-      })
-      .catch(() => {});
-
-    // Prefetch sprinkles instrument
-    Soundfont.instrument(ctx, 'music_box', { soundfont: 'MusyngKite' })
-      .then(inst => {
-        nodes.current.sfSprinkle = inst;
-        try { inst.disconnect && inst.disconnect(); } catch {}
-        try { inst.connect && inst.connect(sprinkleGain); } catch {}
       })
       .catch(() => {});
 
@@ -205,31 +161,6 @@ export default function App() {
     src.connect(hp).connect(gain).connect(drums);
     src.start(time);
     src.stop(time + 0.06);
-  }
-
-  // ---- Sprinkles (very sparse, high register) ----
-  function incOctName(note, delta = 1) {
-    const m = /^([A-Ga-g][#b]?)(-?\d)$/.exec(note);
-    if (!m) return note;
-    const base = m[1];
-    const oct = parseInt(m[2], 10) + delta;
-    return `${base}${oct}`;
-  }
-  function triggerSprinkle(time, chord) {
-    const inst = nodes.current.sfSprinkle;
-    if (!inst) return;
-    // build a tiny motif per phase if missing
-    if (!phaseMotifRef.current) phaseMotifRef.current = makePhaseMotif();
-    const motif = phaseMotifRef.current;
-    const beatSec = 60 / bpmRef.current;
-    const dur = Math.max(0.08, Math.min(0.18, 0.25 * beatSec));
-    motif.offsets.forEach((off, i) => {
-      const idx = motif.toneIdx[i % motif.toneIdx.length];
-      const tone = chord[Math.min(idx, chord.length - 1)];
-      const hi = incOctName(tone, motif.octavesUp);
-      const jitter = (Math.random() - 0.5) * 0.02;
-      try { inst.play(hi, time + off * beatSec + jitter, { duration: dur }); } catch {}
-    });
   }
 
   // ---- Bass (deep, slow, sustained) ----
@@ -310,18 +241,8 @@ export default function App() {
     const chord = progressionRef.current[barIndex % progressionRef.current.length];
     barCountRef.current = barIndex + 1;
     triggerPadChord(time, chord);
-    // bass on root
-    if (bassOn) triggerBass(time, chord[0]);
-    // phase-based sprinkles with motif and min gap
-    const phaseIdx = Math.floor(barIndex / PHASE_LENGTH_BARS);
-    const motif = phaseMotifRef.current || makePhaseMotif();
-    phaseMotifRef.current = motif;
-    const inPhrase = barIndex % motif.phraseBars;
-    if (sprinkleOn && motif.activeBars[inPhrase] && (barIndex - (lastSprinkleBarRef.current ?? -999)) >= SPRINKLE_MIN_GAP_BARS) {
-      try { console.log(`Sprinkle scheduled at bar ${barIndex + 1}`, { chord, motif }); } catch {}
-      triggerSprinkle(time, chord);
-      lastSprinkleBarRef.current = barIndex;
-    }
+    // bass on root (always on)
+    triggerBass(time, chord[0]);
   };
 
   async function toggle() {
@@ -364,10 +285,6 @@ export default function App() {
   // Persist BPM and update scheduler
   useEffect(() => { try { localStorage.setItem('bp_bpm', String(bpm)); } catch {} }, [bpm]);
   useEffect(() => { if (schedulerRef.current) try { schedulerRef.current.setBpm(bpm); } catch {} }, [bpm]);
-  // Persist toggles
-  useEffect(() => { try { localStorage.setItem('bp_el_bass', String(bassOn)); } catch {} }, [bassOn]);
-  useEffect(() => { try { localStorage.setItem('bp_el_sprinkle', String(sprinkleOn)); } catch {} }, [sprinkleOn]);
-
   return (
     <main className="card">
       <div className="titlebar"><h1>Beat Parakeet</h1></div>
@@ -380,21 +297,6 @@ export default function App() {
                  onChange={(e) => setBpm(Number(e.target.value))} />
         </div>
       </section>
-
-      <section className="bg-wrap" aria-label="Extras">
-        <label className="title">Extras</label>
-        <div className="radios" role="group" aria-label="Extras">
-          <label className="radio">
-            <input type="checkbox" checked={bassOn} onChange={(e) => setBassOn(e.target.checked)} />
-            <span className="label">Bass</span>
-          </label>
-          <label className="radio">
-            <input type="checkbox" checked={sprinkleOn} onChange={(e) => setSprinkleOn(e.target.checked)} />
-            <span className="label">Sprinkles</span>
-          </label>
-        </div>
-      </section>
-
       <button id="play" className="play-btn" data-state={playing ? 'playing' : undefined} onClick={toggle}>
         {playing ? 'Pause' : 'Play'}
       </button>
