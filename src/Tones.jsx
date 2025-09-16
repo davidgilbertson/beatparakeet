@@ -40,31 +40,17 @@ export default function Tones() {
   const vibratoDepth = 0.03;
   const reverbWet = 0.18;
   const stereoWidth = 1;
-  const PAD_LEVEL = 1.6;
+  const CHORD_LEVEL = 1.6;
   const MUSIC_LEVEL = 2.5;
   const KICK_VOLUME_DB = -20;
-  const PAD_INSTRUMENT = 'pan_flute'
+  const CHORD_INSTRUMENT = 'pan_flute'
 
   const buildDate = useMemo(() => new Date(typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__ : Date.now()), []);
   const nodes = useRef({});
   const progressionRef = useRef(MINOR_POOLS[0]);
   const lastIndexRef = useRef(-1);
-  const sfPromiseRef = useRef(null);
 
-  // Prefetch soundfont on load so samples are ready before play
-  useEffect(() => {
-    try {
-      const ctx = Tone.getContext();
-      const ac = ctx.rawContext || ctx._context || ctx;
-      sfPromiseRef.current = Soundfont.instrument(ac, PAD_INSTRUMENT, { soundfont: 'MusyngKite'});
-      sfPromiseRef.current.then((inst) => {
-        nodes.current.sfPad = inst;
-        try { inst.disconnect(); } catch {}
-        const pin = nodes.current?.padIn;
-        if (pin) { try { inst.connect(pin.input ? pin.input : pin); } catch {} }
-      }).catch(() => {});
-    } catch {}
-  }, []);
+  // Legacy prefetch removed; instrument is loaded when building the graph below.
 
   // Initialize audio graph once
   useEffect(() => {
@@ -89,17 +75,17 @@ export default function Tones() {
     const musicLevel = new Tone.Gain(MUSIC_LEVEL).connect(glue);
     musicGain.connect(musicLevel);
 
-    const padIn = new Tone.Gain(1);
+    const chordIn = new Tone.Gain(1);
     const wow = new Tone.Vibrato({ frequency: 0.8, depth: vibratoDepth });
-    const padFilter = new Tone.Filter({ type: 'lowpass', frequency: 1400, Q: 0.2 });
-    const padRev = new Tone.Reverb({ decay: 2.8, preDelay: 0.02, wet: reverbWet });
+    const chordFilter = new Tone.Filter({ type: 'lowpass', frequency: 1400, Q: 0.2 });
+    const chordRev = new Tone.Reverb({ decay: 2.8, preDelay: 0.02, wet: reverbWet });
     const width = new Tone.StereoWidener({ width: stereoWidth });
-    const padGain = new Tone.Gain(PAD_LEVEL);
-    padIn.chain(padFilter, padGain, wow, padRev, width, musicGain);
+    const chordGain = new Tone.Gain(CHORD_LEVEL);
+    chordIn.chain(chordFilter, chordGain, wow, chordRev, width, musicGain);
 
     const ac = Tone.getContext().rawContext || Tone.getContext()._context || Tone.getContext();
-    Soundfont.instrument(ac, PAD_INSTRUMENT, { soundfont: 'MusyngKite', destination: (padIn.input ? padIn.input : padIn) })
-      .then(inst => { nodes.current.sfPad = inst; })
+    Soundfont.instrument(ac, CHORD_INSTRUMENT, { soundfont: 'MusyngKite', destination: (chordIn.input ? chordIn.input : chordIn) })
+      .then(inst => { nodes.current.sfChord = inst; })
       .catch(() => {});
 
     const kick = new Tone.MembraneSynth({
@@ -123,19 +109,19 @@ export default function Tones() {
     transport.bpm.value = bpm;
 
     const HUMANIZE_SEC = 0.01;
-    const padPart = new Tone.Part((time, chordIndex) => {
+    const chordPart = new Tone.Part((time, chordIndex) => {
       const prog = progressionRef.current;
       const base = prog[chordIndex % prog.length];
       const notes = base.slice(0, Math.min(4, base.length));
       const offset = (Math.random() - 0.5) * HUMANIZE_SEC;
       const currentBlend = Math.max(0, Math.min(1, blendRef.current));
-      if (nodes.current?.sfPad) {
+      if (nodes.current?.sfChord) {
         const dur = Tone.Time('1m').toSeconds();
         if (currentBlend <= 0.001) return;
-        notes.forEach(n => { try { nodes.current.sfPad.play(n, time + offset, { duration: dur }); } catch {} });
+        notes.forEach(n => { try { nodes.current.sfChord.play(n, time + offset, { duration: dur }); } catch {} });
       }
     }, [ ['0:0',0], ['1:0',1], ['2:0',2], ['3:0',3] ]);
-    padPart.loop = true; padPart.loopEnd = '4m'; padPart.start(0);
+    chordPart.loop = true; chordPart.loopEnd = '4m'; chordPart.start(0);
 
     const kickPart = new Tone.Part((time) => { const off = (Math.random() - 0.5) * HUMANIZE_SEC; kick.triggerAttackRelease('C2','8n', time + off); }, ['0:0','1:0','2:0','2:3','3:0']);
     kickPart.loop = true; kickPart.loopEnd = '4m'; kickPart.start(0);
@@ -145,7 +131,7 @@ export default function Tones() {
 
     const hatLoop = new Tone.Loop((time) => { const off = (Math.random() - 0.5) * HUMANIZE_SEC; hat.triggerAttackRelease('16n', time + off); }, '8n').start(0);
 
-    nodes.current = { limiter, mixBus, glue, rain, kick, snrNoise, hat, padPart, kickPart, snarePart, hatLoop, wow, padRev, width, padFilter, padIn, musicGain, rainGain };
+    nodes.current = { limiter, mixBus, glue, rain, kick, snrNoise, hat, chordPart, kickPart, snarePart, hatLoop, wow, chordRev, width, chordFilter, chordIn, musicGain, rainGain };
 
     const chooseProgression = () => {
       const pools = MINOR_POOLS;
@@ -157,12 +143,12 @@ export default function Tones() {
     const changeId = transport.scheduleRepeat(() => { chooseProgression(); }, `${CHANGE_EVERY_BARS}m`, `${CHANGE_EVERY_BARS}m`);
 
     return () => {
-      try { padPart.dispose(); kickPart.dispose(); snarePart.dispose(); hatLoop.dispose(); } catch {}
+      try { chordPart.dispose(); kickPart.dispose(); snarePart.dispose(); hatLoop.dispose(); } catch {}
       try { kick.dispose(); snrNoise.dispose(); hat.dispose(); } catch {}
       try { rain.dispose(); } catch {}
       try { glue.dispose(); mixBus.dispose(); limiter.dispose(); } catch {}
       try { transport.clear(changeId); } catch {}
-      try { nodes.current.sfPad && nodes.current.sfPad.stop && nodes.current.sfPad.stop(); } catch {}
+      try { nodes.current.sfChord && nodes.current.sfChord.stop && nodes.current.sfChord.stop(); } catch {}
     };
   }, []);
 

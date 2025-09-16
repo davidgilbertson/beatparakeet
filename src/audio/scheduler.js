@@ -1,10 +1,14 @@
 // Simple lookahead scheduler for Web Audio without external deps
 // Schedules 16th notes ahead of time with a setInterval tick.
 
+// Defaults chosen for smooth scheduling on modern browsers/devices.
+const DEFAULT_LOOKAHEAD_MS = 25;      // scheduler tick interval
+const DEFAULT_SCHEDULE_AHEAD_SEC = 0.2; // how far ahead to schedule events
+
 export default function createScheduler(ctx, opts = {}) {
   let bpm = opts.bpm ?? 120;
-  let lookaheadMs = opts.lookaheadMs ?? 25;
-  let scheduleAheadSec = opts.scheduleAheadSec ?? 0.1;
+  let lookaheadMs = opts.lookaheadMs ?? DEFAULT_LOOKAHEAD_MS;
+  let scheduleAheadSec = opts.scheduleAheadSec ?? DEFAULT_SCHEDULE_AHEAD_SEC;
   let swing = opts.swing ?? 0; // 0..0.5 typical; applies to off-8ths
   let onSixteenth = opts.onSixteenth ?? (() => {});
   let onBar = opts.onBar ?? (() => {});

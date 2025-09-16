@@ -21,13 +21,17 @@ body {
   padding: 24px;
   margin: 0 auto;
 }
-.titlebar { display:flex; align-items:center; gap:14px; margin-bottom: 24px; }
+.titlebar { display:flex; align-items:center; gap:14px; margin-bottom: 16px; }
 h1 { font-weight: 700; letter-spacing: 0.3px; margin: 0; font-size: 22px; }
+.tag { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; padding: 4px 10px; border-radius: 999px; background: rgba(123, 211, 137, 0.16); color: var(--accent); font-weight: 700; }
 
-.controls { display: grid; grid-template-columns: 1fr; gap: 24px; align-items: center; }
-.bpm { display: grid; gap: 14px; }
-.bpm label { font-size: 14px; color: var(--muted); }
-.bpm output { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--fg); margin-left: 6px; }
+.controls { display: grid; grid-template-columns: 1fr; gap: 24px; align-items: center; padding-top: 16px;}
+.slider-row { display: grid; gap: 16px; }
+/* BPM uses same styling as other sliders via .slider-row */
+
+/* Consistent slider label/value styling */
+.slider-row label { font-size: 16px; color: var(--fg); }
+.slider-row .value { font-variant-numeric: tabular-nums; font-weight: 400; color: #717172; margin-left: 6px; }
 
 /* Slider */
 input[type="range"] { width: 100%; }
@@ -40,7 +44,9 @@ input[type="range"]::-moz-range-thumb { width: 22px; height: 22px; border-radius
 /* Buttons */
 button { background: var(--accent); color: #0b1016; border: none; border-radius: 12px; padding: 12px 18px; font-weight: 700; cursor: pointer; box-shadow: 0 10px 20px rgba(123, 211, 137, 0.25); }
 button[data-state="playing"] { background: #ef7d7d; color: #1a0f10; box-shadow: 0 10px 20px rgba(239, 125, 125, 0.24); }
-.play-btn { display: block; width: 100%; margin-top: 72px; padding: 20px 24px; font-size: 20px; border-radius: 14px; }
+.play-btn { display: block; width: 100%; margin-top: 48px; padding: 20px 24px; font-size: 20px; border-radius: 14px; }
+
+/* (removed details.config; config always visible) */
 
 /* Background selector */
 .bg-wrap { margin-top: 28px; margin-bottom: 12px; }
