@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import App from './App.jsx';
 import Tones from './Tones.jsx';
 import Techno from './Techno.jsx';
+import Piano from './Piano.jsx';
 import './index.css';
 
 const pathname = typeof window !== 'undefined' ? window.location.pathname : '/';
@@ -12,6 +13,8 @@ if (pathname.startsWith('/tones')) {
   view = <Tones />;
 } else if (pathname.startsWith('/techno')) {
   view = <Techno />;
+} else if (pathname.startsWith('/piano')) {
+  view = <Piano />;
 }
 
 createRoot(document.getElementById('root')).render(

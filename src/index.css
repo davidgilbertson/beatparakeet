@@ -33,6 +33,9 @@ h1 { font-weight: 700; letter-spacing: 0.3px; margin: 0; font-size: 22px; }
 .slider-row label { font-size: 16px; color: var(--fg); }
 .slider-row .value { font-variant-numeric: tabular-nums; font-weight: 400; color: #717172; margin-left: 6px; }
 
+.option-row { display:flex; align-items:center; gap: 12px; font-size: 15px; color: var(--fg); }
+.option-row input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); }
+
 /* Slider */
 input[type="range"] { width: 100%; }
 input[type="range"] { -webkit-appearance: none; appearance: none; height: 8px; border-radius: 999px; background: transparent; outline: none; }
