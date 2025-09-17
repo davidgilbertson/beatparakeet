@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Soundfont from 'soundfont-player';
 import createScheduler from './audio/scheduler.js';
+import { getNormalizationGain } from './audio/normalization.js';
 
 const SILENCE_EPS = 0.0005;
 
@@ -441,6 +442,9 @@ export default function Piano() {
     const pianoBus = ctx.createGain();
     pianoBus.gain.value = pianoLevelRef.current;
     pianoBus.connect(mixBus);
+    const pianoNorm = ctx.createGain();
+    pianoNorm.gain.value = 1;
+    pianoNorm.connect(pianoBus);
     const pianoVerbSend = ctx.createGain();
     pianoVerbSend.gain.value = 0.55;
     pianoBus.connect(pianoVerbSend);
@@ -449,6 +453,12 @@ export default function Piano() {
     const stringBus = ctx.createGain();
     stringBus.gain.value = stringsLevelRef.current;
     stringBus.connect(mixBus);
+    const stringNorm = ctx.createGain();
+    stringNorm.gain.value = 1;
+    stringNorm.connect(stringBus);
+    const celloNorm = ctx.createGain();
+    celloNorm.gain.value = 1;
+    celloNorm.connect(stringBus);
     const stringVerbSend = ctx.createGain();
     stringVerbSend.gain.value = 0.72;
     stringBus.connect(stringVerbSend);
@@ -457,6 +467,9 @@ export default function Piano() {
     const windBus = ctx.createGain();
     windBus.gain.value = windsLevelRef.current;
     windBus.connect(mixBus);
+    const oboeNorm = ctx.createGain();
+    oboeNorm.gain.value = 1;
+    oboeNorm.connect(windBus);
     const windVerbSend = ctx.createGain();
     windVerbSend.gain.value = 0.65;
     windBus.connect(windVerbSend);
@@ -486,10 +499,14 @@ export default function Piano() {
       reverb,
       reverbGain,
       pianoBus,
+      pianoNorm,
       pianoVerbSend,
       stringBus,
+      stringNorm,
+      celloNorm,
       stringVerbSend,
       windBus,
+      oboeNorm,
       windVerbSend,
       textureBus,
       textureFilter,
@@ -505,7 +522,9 @@ export default function Piano() {
         if (inst.disconnect) {
           try { inst.disconnect(); } catch {}
         }
-        if (inst.connect) inst.connect(pianoBus);
+        if (inst.connect) inst.connect(nodes.pianoNorm);
+        const gain = getNormalizationGain(inst, 'sf:acoustic_grand_piano');
+        nodes.pianoNorm.gain.value = Number.isFinite(gain) ? gain : 1;
       })
       .catch(() => {});
 
@@ -516,7 +535,9 @@ export default function Piano() {
         if (inst.disconnect) {
           try { inst.disconnect(); } catch {}
         }
-        if (inst.connect) inst.connect(stringBus);
+        if (inst.connect) inst.connect(nodes.stringNorm);
+        const gain = getNormalizationGain(inst, 'sf:string_ensemble_1');
+        nodes.stringNorm.gain.value = Number.isFinite(gain) ? gain : 1;
       })
       .catch(() => {});
 
@@ -527,7 +548,9 @@ export default function Piano() {
         if (inst.disconnect) {
           try { inst.disconnect(); } catch {}
         }
-        if (inst.connect) inst.connect(stringBus);
+        if (inst.connect) inst.connect(nodes.celloNorm);
+        const gain = getNormalizationGain(inst, 'sf:cello');
+        nodes.celloNorm.gain.value = Number.isFinite(gain) ? gain : 1;
       })
       .catch(() => {});
 
@@ -538,7 +561,9 @@ export default function Piano() {
         if (inst.disconnect) {
           try { inst.disconnect(); } catch {}
         }
-        if (inst.connect) inst.connect(windBus);
+        if (inst.connect) inst.connect(nodes.oboeNorm);
+        const gain = getNormalizationGain(inst, 'sf:oboe');
+        nodes.oboeNorm.gain.value = Number.isFinite(gain) ? gain : 1;
       })
       .catch(() => {});
 

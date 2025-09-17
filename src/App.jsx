@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import Soundfont from 'soundfont-player';
 import rainLoopUrl from '../rain_loop.wav';
 import createScheduler from './audio/scheduler.js';
+import { getNormalizationGain } from './audio/normalization.js';
 
 // App constants
 const DEFAULT_CHORD_GAIN = 0.1; // chords default gain
@@ -11,35 +12,6 @@ const DEFAULT_RAIN_GAIN = 1.0;  // rain default gain
 const SWING = 0.2; // 8th-note swing amount (0..~0.5)
 const CHORD_INSTRUMENT = 'pan_flute';
 const SILENCE_EPS = 0.0005; // threshold below which a bus is treated as off
-
-// Cache normalization so analysis only runs once (React StrictMode mounts twice in dev)
-let CACHED_CHORD_NORM_GAIN = null;
-
-// Compute a single peak-based normalization gain for a Soundfont instrument.
-// Returns the gain to apply (number).
-function computePeakNormalizationGain(instrument) {
-  let chosenGain = 1;
-  const buffers = instrument && instrument.buffers;
-  if (!buffers || typeof buffers !== 'object') {
-    return chosenGain;
-  }
-  const entries = Object.values(buffers);
-  let globalPeak = 0;
-  for (const buf of entries) {
-    if (!buf) continue;
-    let peak = 0;
-    for (let ch = 0; ch < buf.numberOfChannels; ch++) {
-      const data = buf.getChannelData(ch);
-      for (let i = 0; i < data.length; i++) {
-        const a = Math.abs(data[i]);
-        if (a > peak) peak = a;
-      }
-    }
-    if (peak > globalPeak) globalPeak = peak;
-  }
-  chosenGain = globalPeak > 0 ? 1 / globalPeak : 1;
-  return chosenGain;
-}
 
 // Three 4-bar progressions; cycle through each for CHANGE_EVERY_BARS bars
 const CHORD_PROGRESSIONS = [
@@ -164,14 +136,9 @@ export default function App() {
         nodes.current.sfChord = inst;
         if (inst.disconnect) inst.disconnect();
         if (inst.connect) inst.connect(nodes.current.chordNormNode || nodes.current.chordGainNode);
-        let g = CACHED_CHORD_NORM_GAIN;
-        if (!Number.isFinite(g)) {
-          const gain = computePeakNormalizationGain(inst);
-          g = Number.isFinite(gain) ? gain : 1;
-          CACHED_CHORD_NORM_GAIN = g;
-        }
-        // Apply as master gain for chords
-        (nodes.current.chordNormNode || nodes.current.chordGainNode).gain.value = g;
+        const gain = getNormalizationGain(inst, `sf:${CHORD_INSTRUMENT}`);
+        const normNode = nodes.current.chordNormNode || nodes.current.chordGainNode;
+        normNode.gain.value = Number.isFinite(gain) ? gain : 1;
       })
       .catch(() => {});
 

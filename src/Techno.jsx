@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Soundfont from 'soundfont-player';
 import createScheduler from './audio/scheduler.js';
+import { getNormalizationGain } from './audio/normalization.js';
 
 const ARRANGEMENT = [
   {
@@ -631,10 +632,16 @@ export default function Techno() {
     const bassBus = ctx.createGain();
     bassBus.gain.value = bassLevelRef.current;
     bassBus.connect(mixBus);
+    const bassNorm = ctx.createGain();
+    bassNorm.gain.value = 1;
+    bassNorm.connect(bassBus);
 
     const padBus = ctx.createGain();
     padBus.gain.value = padLevelRef.current;
     padBus.connect(mixBus);
+    const padNorm = ctx.createGain();
+    padNorm.gain.value = 1;
+    padNorm.connect(padBus);
     const padVerbSend = ctx.createGain();
     padVerbSend.gain.value = 0.46;
     padVerbSend.connect(reverb);
@@ -643,6 +650,9 @@ export default function Techno() {
     const leadBus = ctx.createGain();
     leadBus.gain.value = leadLevelRef.current;
     leadBus.connect(mixBus);
+    const leadNorm = ctx.createGain();
+    leadNorm.gain.value = 1;
+    leadNorm.connect(leadBus);
     const leadDelaySend = ctx.createGain();
     leadDelaySend.gain.value = 0.65;
     leadDelaySend.connect(delay);
@@ -655,6 +665,9 @@ export default function Techno() {
     const fxBus = ctx.createGain();
     fxBus.gain.value = fxLevelRef.current;
     fxBus.connect(mixBus);
+    const stabNorm = ctx.createGain();
+    stabNorm.gain.value = 1;
+    stabNorm.connect(fxBus);
     const fxVerbSend = ctx.createGain();
     fxVerbSend.gain.value = 0.5;
     fxVerbSend.connect(reverb);
@@ -682,12 +695,16 @@ export default function Techno() {
       hatBus,
       percBus,
       bassBus,
+      bassNorm,
       padBus,
+      padNorm,
       padVerbSend,
       leadBus,
+      leadNorm,
       leadDelaySend,
       leadVerbSend,
       fxBus,
+      stabNorm,
       fxVerbSend,
       noiseBuffer,
     };
@@ -701,7 +718,9 @@ export default function Techno() {
         if (inst.disconnect) {
           try { inst.disconnect(); } catch {}
         }
-        if (inst.connect) inst.connect(bassBus);
+        if (inst.connect) inst.connect(nodes.bassNorm);
+        const gain = getNormalizationGain(inst, 'sf:synth_bass_2');
+        nodes.bassNorm.gain.value = Number.isFinite(gain) ? gain : 1;
       })
       .catch(() => {});
 
@@ -712,7 +731,9 @@ export default function Techno() {
         if (inst.disconnect) {
           try { inst.disconnect(); } catch {}
         }
-        if (inst.connect) inst.connect(padBus);
+        if (inst.connect) inst.connect(nodes.padNorm);
+        const gain = getNormalizationGain(inst, 'sf:synth_strings_1');
+        nodes.padNorm.gain.value = Number.isFinite(gain) ? gain : 1;
       })
       .catch(() => {});
 
@@ -723,7 +744,9 @@ export default function Techno() {
         if (inst.disconnect) {
           try { inst.disconnect(); } catch {}
         }
-        if (inst.connect) inst.connect(leadBus);
+        if (inst.connect) inst.connect(nodes.leadNorm);
+        const gain = getNormalizationGain(inst, 'sf:lead_2_sawtooth');
+        nodes.leadNorm.gain.value = Number.isFinite(gain) ? gain : 1;
       })
       .catch(() => {});
 
@@ -734,7 +757,9 @@ export default function Techno() {
         if (inst.disconnect) {
           try { inst.disconnect(); } catch {}
         }
-        if (inst.connect) inst.connect(fxBus);
+        if (inst.connect) inst.connect(nodes.stabNorm);
+        const gain = getNormalizationGain(inst, 'sf:synth_brass_1');
+        nodes.stabNorm.gain.value = Number.isFinite(gain) ? gain : 1;
       })
       .catch(() => {});
 
